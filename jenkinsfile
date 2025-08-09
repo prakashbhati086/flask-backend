@@ -1,27 +1,74 @@
 pipeline {
     agent any
-
+    
+    environment {
+        FLASK_APP = 'app.py'
+        FLASK_ENV = 'production'
+    }
+    
     stages {
-         stage('Clone Code') {
+        stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/prakashbhati086/aws.git'
+                echo 'Checking out Flask backend code...'
+                checkout scm
             }
-            }
-
-        stage('Install Dependencies') {
+        }
+        
+        stage('Setup Python Environment') {
             steps {
-                dir('flask-backend') {
-                    sh 'pip3 install -r requirements.txt'
+                script {
+                    sh '''
+                        python3 -m venv venv
+                        . venv/bin/activate
+                        pip install --upgrade pip
+                    '''
                 }
             }
         }
-
-        stage('Restart App') {
+        
+        stage('Install Dependencies') {
             steps {
-                dir('flask-backend') {
-                    sh 'pm2 restart flask-app || pm2 start app.py --name flask-app'
+                script {
+                    sh '''
+                        . venv/bin/activate
+                        pip install -r requirements.txt
+                    '''
                 }
             }
+        }
+        
+        stage('Test') {
+            steps {
+                script {
+                    sh '''
+                        . venv/bin/activate
+                        echo "Running Flask tests..."
+                        # Add your test commands here
+                        python3 -c "import app; print('Flask app imports successfully')"
+                    '''
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                script {
+                    sh '''
+                        echo "Deploying Flask application..."
+                        pm2 restart flask-backend || pm2 start app.py --name flask-backend --interpreter python3
+                        pm2 save
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Flask pipeline completed successfully!'
+        }
+        failure {
+            echo 'Flask pipeline failed!'
         }
     }
 }
