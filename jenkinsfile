@@ -1,25 +1,74 @@
-stage('Deploy') {
-    steps {
-        script {
-            sh '''
-                echo "Deploying Flask application..."
-                . venv/bin/activate
-                
-                # Kill any existing Flask process
-                pkill -f "python.*app.py" || true
-                sleep 2
-                
-                # Start Flask application in background
-                nohup python3 app.py > flask.log 2>&1 &
-                
-                # Wait a moment and check if it's running
-                sleep 3
-                
-                # Test if Flask is responding
-                curl -f http://localhost:5000 && echo "✅ Flask deployed successfully!" || echo "⚠️ Flask might still be starting"
-                
-                echo "Deployment completed"
-            '''
+pipeline {
+    agent any
+    
+    environment {
+        FLASK_APP = 'app.py'
+        FLASK_ENV = 'production'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out Flask backend code...'
+                checkout scm
+            }
+        }
+        
+        stage('Setup Python Environment') {
+            steps {
+                script {
+                    sh '''
+                        python3 -m venv venv
+                        . venv/bin/activate
+                        pip install --upgrade pip
+                    '''
+                }
+            }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                script {
+                    sh '''
+                        . venv/bin/activate
+                        pip install -r requirements.txt
+                    '''
+                }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                script {
+                    sh '''
+                        . venv/bin/activate
+                        echo "Running Flask tests..."
+                        # Add your test commands here
+                        python3 -c "import app; print('Flask app imports successfully')"
+                    '''
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                script {
+                    sh '''
+                        echo "Deploying Flask application..."
+                        pm2 restart flask-backend || pm2 start app.py --name flask-backend --interpreter python3
+                        pm2 save
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Flask pipeline completed successfully!'
+        }
+        failure {
+            echo 'Flask pipeline failed!'
         }
     }
 }
